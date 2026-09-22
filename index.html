@@ -2,8 +2,17 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Dolly</title>
+<meta name="description" content="Turn a still image into a dolly, pan or zoom clip. Draw regions, render the camera move as WebM or GIF — entirely in your browser.">
+<meta name="theme-color" content="#101014">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="favicon.png" type="image/png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Dolly">
 <style>
   :root{
     --ink:#101014;
@@ -1146,6 +1155,58 @@ function lzw(pixels, out){
     for (let j = 0; j < n; j++) out.push(data[i + j]);
   }
   out.push(0x00);
+}
+
+/* ================= PWA ================= */
+/* Dolly makes no network requests once loaded, so the service worker
+   caches the whole app and offline is total, not partial.
+
+   The worker activates as soon as it installs (skipWaiting + claim), so
+   an update lands on the next load. When that happens mid-session we say
+   so rather than silently swapping the code underneath a render — the
+   page the user is looking at keeps running until they choose to reload. */
+if ("serviceWorker" in navigator){
+  addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").then(reg => {
+      reg.addEventListener("updatefound", () => {
+        const sw = reg.installing;
+        if (!sw) return;
+        sw.addEventListener("statechange", () => {
+          // controller === null means this is the first install, not an
+          // update — nothing to tell the user about.
+          if (sw.state === "installed" && navigator.serviceWorker.controller)
+            offerReload();
+        });
+      });
+    }).catch(() => { /* offline support is optional; app works regardless */ });
+  });
+}
+
+function offerReload(){
+  if ($("swUpdate")) return;
+  const bar = document.createElement("div");
+  bar.id = "swUpdate";
+  bar.style.cssText =
+    "position:fixed;left:50%;transform:translateX(-50%);bottom:16px;z-index:99;" +
+    "background:var(--panel);border:1px solid var(--amber);border-radius:8px;" +
+    "padding:10px 14px;display:flex;gap:12px;align-items:center;" +
+    "font-family:var(--mono);font-size:.74rem;color:var(--text);" +
+    "box-shadow:0 6px 24px rgba(0,0,0,.5);max-width:calc(100vw - 32px)";
+  const msg = document.createElement("span");
+  msg.textContent = "New version available";
+  const btn = document.createElement("button");
+  btn.textContent = "Reload";
+  btn.style.cssText =
+    "background:var(--amber);border:none;border-radius:5px;color:#181000;" +
+    "font-family:var(--mono);font-size:.74rem;font-weight:600;padding:5px 12px;cursor:pointer";
+  btn.addEventListener("click", () => location.reload());
+  const dismiss = document.createElement("span");
+  dismiss.textContent = "×";
+  dismiss.title = "Dismiss";
+  dismiss.style.cssText = "color:var(--muted);cursor:pointer;padding:0 2px";
+  dismiss.addEventListener("click", () => bar.remove());
+  bar.append(msg, btn, dismiss);
+  document.body.appendChild(bar);
 }
 </script>
 </body>

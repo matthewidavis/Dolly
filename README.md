@@ -22,6 +22,19 @@ camera move between them as a video or GIF.
 - **GIF export.** Built-in GIF89a encoder with a median-cut global
   palette and optional Floyd–Steinberg dithering.
 
+## Install it
+
+Dolly is a PWA, so you can install it to your home screen or desktop and
+it runs standalone, without browser chrome.
+
+- **Android / Chrome / Edge** — open the site, then "Install app" or "Add
+  to Home screen" from the browser menu.
+- **iOS / Safari** — Share → Add to Home Screen.
+
+Once installed it works **fully offline**. Dolly makes no network
+requests after load, so there is nothing to degrade when you lose
+connectivity — the whole app is cached.
+
 ## Privacy
 
 Everything runs client-side. Your image is never uploaded — there is no
@@ -29,19 +42,26 @@ server, no analytics, and no network request after the page loads.
 
 ## Running it locally
 
-It is a single self-contained HTML file with no build step and no
+The app is a single self-contained HTML file with no build step and no
 dependencies:
 
 ```
 git clone https://github.com/matthewidavis/Dolly.git
 cd Dolly
-```
-
-Then open `index.html` in a browser, or serve the directory:
-
-```
 python -m http.server 8000
 ```
+
+Then open `http://localhost:8000`. Serving it over HTTP (rather than
+opening `index.html` directly) is what lets the service worker register,
+which is also why the app still works with the server stopped.
+
+## Deploying a change
+
+`sw.js` caches the app, so a returning visitor is served the cached copy
+until the worker sees a new version. **Bump `CACHE` in `sw.js` on every
+deploy** — otherwise the change ships and nobody receives it. When the
+worker does find an update, the page offers a reload rather than swapping
+the code mid-render.
 
 ## Browser support
 
