@@ -1,0 +1,1152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dolly</title>
+<style>
+  :root{
+    --ink:#101014;
+    --panel:#1a1b21;
+    --panel-2:#15161c;
+    --line:#2c2e38;
+    --text:#e8e6e0;
+    --muted:#8b8d98;
+    --amber:#f2b33d;
+    --amber-dim:#8a6a2a;
+    --rec:#ff5252;
+    --radius:10px;
+    --mono:ui-monospace,"SF Mono","Cascadia Mono",Consolas,Menlo,monospace;
+    --sans:"Avenir Next","Segoe UI",system-ui,-apple-system,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--ink);color:var(--text);font-family:var(--sans);min-height:100%}
+  body{padding:20px 16px 60px;max-width:1180px;margin:0 auto}
+
+  header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:18px}
+  header h1{font-size:1.35rem;font-weight:600;letter-spacing:.02em}
+  header h1 .dot{color:var(--rec)}
+  header .tag{font-family:var(--mono);font-size:.72rem;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}
+
+  .layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px}
+  @media(max-width:880px){.layout{grid-template-columns:1fr}}
+
+  /* ---------- viewfinder ---------- */
+  .stage{background:var(--panel-2);border:1px solid var(--line);border-radius:var(--radius);padding:14px;position:relative}
+  .stage-inner{position:relative;display:flex;justify-content:center;align-items:center;min-height:280px}
+  #vf{max-width:100%;touch-action:none;cursor:crosshair;display:none;border-radius:4px}
+  /* viewfinder corner ticks */
+  .stage-inner::before,.stage-inner::after,
+  .stage .tick-b::before,.stage .tick-b::after{
+    content:"";position:absolute;width:18px;height:18px;border:2px solid var(--amber-dim);pointer-events:none
+  }
+  .stage-inner::before{top:-4px;left:-4px;border-right:none;border-bottom:none}
+  .stage-inner::after{top:-4px;right:-4px;border-left:none;border-bottom:none}
+  .stage .tick-b::before{bottom:10px;left:10px;border-right:none;border-top:none}
+  .stage .tick-b::after{bottom:10px;right:10px;border-left:none;border-top:none}
+
+  .drop{border:1px dashed var(--line);border-radius:6px;padding:52px 24px;text-align:center;color:var(--muted);
+        width:100%;cursor:pointer;transition:border-color .15s,color .15s}
+  .drop.hot,.drop:hover{border-color:var(--amber);color:var(--text)}
+  .drop strong{color:var(--text);font-weight:600}
+  .drop .sub{font-size:.8rem;margin-top:8px}
+
+  .readout{display:flex;gap:18px;flex-wrap:wrap;font-family:var(--mono);font-size:.72rem;color:var(--muted);
+           margin-top:12px;letter-spacing:.05em}
+  .readout b{color:var(--amber);font-weight:500}
+
+  /* ---------- panel ---------- */
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px;
+         display:flex;flex-direction:column;gap:16px;align-self:start}
+  .field label{display:block;font-family:var(--mono);font-size:.68rem;text-transform:uppercase;
+               letter-spacing:.1em;color:var(--muted);margin-bottom:6px}
+  .field .val{float:right;color:var(--amber)}
+  select,input[type=number]{
+    width:100%;background:var(--panel-2);border:1px solid var(--line);border-radius:6px;color:var(--text);
+    padding:8px 10px;font-family:var(--mono);font-size:.85rem}
+  select:focus,input:focus,button:focus-visible{outline:2px solid var(--amber);outline-offset:1px}
+  input[type=range]{width:100%;accent-color:var(--amber)}
+
+  .seg{display:flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  .seg button{flex:1;background:var(--panel-2);border:none;color:var(--muted);padding:8px 6px;
+              font-family:var(--mono);font-size:.75rem;cursor:pointer;letter-spacing:.04em}
+  .seg button.on{background:var(--amber);color:#181000;font-weight:600}
+  .seg button+button{border-left:1px solid var(--line)}
+
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;min-height:26px}
+  .chips-empty{font-family:var(--mono);font-size:.63rem;color:var(--muted);align-self:center}
+  .chip{display:inline-flex;align-items:center;gap:6px;background:var(--panel-2);border:1px solid var(--line);
+        border-radius:999px;padding:3px 8px 3px 10px;font-family:var(--mono);font-size:.72rem;
+        color:var(--text);cursor:pointer;user-select:none}
+  .chip.on{border-color:var(--amber);color:var(--amber)}
+  .chip .x{color:var(--muted);padding:0 2px}
+  .chip .x:hover{color:var(--rec)}
+  .mini-row{display:flex;gap:6px}
+  .mini-row button{flex:1;background:var(--panel-2);border:1px solid var(--line);border-radius:6px;
+                   color:var(--text);font-family:var(--mono);font-size:.66rem;padding:6px 2px;cursor:pointer}
+  .mini-row button:hover{border-color:var(--muted)}
+  .chip .arw{color:var(--muted);padding:0 2px}
+  .chip .arw:hover{color:var(--amber)}
+
+  details.adv{border-top:1px solid var(--line);padding-top:12px}
+  details.adv summary{font-family:var(--mono);font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;
+                      color:var(--muted);cursor:pointer;list-style:none;display:flex;align-items:center;gap:7px;user-select:none}
+  details.adv summary::-webkit-details-marker{display:none}
+  details.adv summary::before{content:"▸";display:inline-block;transition:transform .15s;color:var(--amber-dim)}
+  details.adv[open] summary::before{transform:rotate(90deg)}
+  details.adv > .field{margin-top:14px}
+  .chk{display:flex;gap:8px;align-items:center;font-family:var(--sans);font-size:.82rem;color:var(--text);
+       text-transform:none;letter-spacing:0;cursor:pointer}
+  .chk input{accent-color:var(--amber)}
+  .readout .warn{color:var(--amber);font-weight:600}
+
+  .btn{display:block;width:100%;padding:10px 12px;border-radius:6px;border:1px solid var(--line);
+       background:var(--panel-2);color:var(--text);font-family:var(--sans);font-size:.9rem;cursor:pointer;
+       transition:border-color .15s}
+  .btn:hover{border-color:var(--muted)}
+  .btn.primary{background:var(--amber);border-color:var(--amber);color:#181000;font-weight:600}
+  .btn.primary:hover{filter:brightness(1.07)}
+  .btn:disabled{opacity:.4;cursor:default}
+  .btn-row{display:flex;flex-direction:column;gap:8px}
+
+  .progress{height:4px;background:var(--line);border-radius:2px;overflow:hidden;display:none}
+  .progress span{display:block;height:100%;width:0;background:var(--amber);transition:width .1s}
+  .status{font-family:var(--mono);font-size:.7rem;color:var(--muted);min-height:1em}
+
+  /* ---------- output monitor ---------- */
+  .monitor{grid-column:1/-1;background:var(--panel-2);border:1px solid var(--line);border-radius:var(--radius);
+           padding:16px;display:none}
+  .monitor h2{font-family:var(--mono);font-size:.7rem;text-transform:uppercase;letter-spacing:.12em;
+              color:var(--muted);margin-bottom:12px}
+  .monitor h2 .rec{color:var(--rec)}
+  .monitor .media{display:flex;justify-content:center}
+  .monitor video,.monitor img,#previewCanvas{max-width:100%;max-height:60vh;border-radius:4px;background:#000}
+  .monitor .dl{margin-top:12px;text-align:center}
+  .monitor .dl a{color:var(--amber);font-family:var(--mono);font-size:.8rem;text-decoration:none;
+                 border:1px solid var(--amber-dim);border-radius:6px;padding:8px 16px;display:inline-block}
+  .monitor .dl a:hover{background:var(--amber);color:#181000}
+
+  @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Dolly <span class="dot">●</span></h1>
+  <span class="tag">draw a frame · render the move</span>
+</header>
+
+<div class="layout">
+
+  <!-- viewfinder -->
+  <section class="stage">
+    <div class="tick-b"></div>
+    <div class="stage-inner">
+      <div class="drop" id="drop" tabindex="0" role="button" aria-label="Load an image">
+        <strong>Drop an image here</strong><br>
+        <span class="sub">or click to browse · or paste from clipboard</span>
+      </div>
+      <canvas id="vf"></canvas>
+    </div>
+    <div class="readout" id="readout">
+      <span>SRC <b id="roSrc">—</b></span>
+      <span>CROP <b id="roCrop">—</b></span>
+      <span>ZOOM <b id="roZoom">—</b></span>
+      <span>T <b id="roT">—</b></span>
+      <span id="roWarn" class="warn" style="display:none"></span>
+    </div>
+    <input type="file" id="file" accept="image/*" hidden>
+  </section>
+
+  <!-- controls -->
+  <aside class="panel">
+    <div class="field">
+      <label>Shots <span class="val" id="seqTotal"></span></label>
+      <div class="chips" id="chips"></div>
+      <div class="mini-row">
+        <button id="addFull" title="Add the full frame as the next shot">+ Full</button>
+        <button id="dupShot" title="Duplicate the active shot, then drag it — same size = pure pan">Dup</button>
+        <button id="clrShots" title="Clear all shots">Clear</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Transition</label>
+      <select id="trans">
+        <option value="move" selected>Glide (dolly)</option>
+        <option value="fade">Crossfade</option>
+        <option value="cut">Cut</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label>Move time <span class="val"><span id="durVal">3.0</span>s</span></label>
+      <input type="range" id="dur" min="0.5" max="15" step="0.1" value="3">
+    </div>
+
+    <div class="field">
+      <label>Dwell per shot <span class="val"><span id="holdVal">0.5</span>s</span></label>
+      <input type="range" id="hold" min="0" max="5" step="0.1" value="0.5">
+    </div>
+
+    <details class="adv">
+      <summary>Advanced</summary>
+
+      <div class="field">
+        <label>Easing</label>
+        <select id="ease">
+          <option value="inout" selected>Ease in–out</option>
+          <option value="out">Ease out</option>
+          <option value="in">Ease in</option>
+          <option value="linear">Linear</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Frame rate <span class="val"><span id="fpsVal">30</span> fps</span></label>
+        <input type="range" id="fps" min="8" max="60" step="1" value="30">
+      </div>
+
+      <div class="field">
+        <label>Output width</label>
+        <select id="outW">
+          <option value="480">480 px (good for GIF)</option>
+          <option value="720" selected>720 px</option>
+          <option value="960">960 px</option>
+          <option value="1280">1280 px</option>
+          <option value="0">Match source image</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>GIF color</label>
+        <label class="chk"><input type="checkbox" id="dither" checked> Floyd–Steinberg dithering</label>
+      </div>
+
+      <div class="field">
+        <label>Quick move (single-shot fallback)</label>
+        <div class="seg" id="dirSeg">
+          <button data-v="in" class="on">Zoom in</button>
+          <button data-v="out">Zoom out</button>
+        </div>
+      </div>
+    </details>
+
+    <div class="btn-row">
+      <button class="btn" id="btnPreview" disabled>Preview</button>
+      <button class="btn primary" id="btnVideo" disabled>Render video (WebM)</button>
+      <button class="btn primary" id="btnGif" disabled>Render GIF</button>
+      <button class="btn" id="btnReset" disabled>Reset region</button>
+    </div>
+
+    <div class="progress" id="prog"><span id="progBar"></span></div>
+    <div class="status" id="status"></div>
+  </aside>
+
+  <!-- output -->
+  <section class="monitor" id="monitor">
+    <h2><span class="rec">●</span> <span id="monTitle">Output</span></h2>
+    <div class="media" id="media"></div>
+    <div class="dl" id="dl"></div>
+  </section>
+
+</div>
+
+<script>
+"use strict";
+/* ================= state ================= */
+const $ = id => document.getElementById(id);
+const vf = $("vf"), vctx = vf.getContext("2d");
+let img = null;                 // HTMLImageElement
+let scale = 1;                  // display px per image px
+let sel = null;                 // selection in IMAGE coords {x,y,w,h}
+let shots = [];                 // shot sequence (rects; {full:true} = whole frame)
+let activeShot = -1;            // index of shot being edited, -1 = free draw
+let lastTotal = 0;              // computed sequence duration (s)
+let ar = 1;                     // image aspect w/h
+let drag = null;                // active pointer op
+let busy = false;
+let previewRAF = 0;
+
+const HANDLE = 14;              // hit radius in display px
+
+/* ================= image loading ================= */
+const drop = $("drop"), fileInput = $("file");
+drop.addEventListener("click", () => fileInput.click());
+drop.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") fileInput.click(); });
+fileInput.addEventListener("change", e => { if (e.target.files[0]) loadFile(e.target.files[0]); });
+
+["dragover","dragenter"].forEach(ev => document.addEventListener(ev, e => {
+  e.preventDefault(); drop.classList.add("hot");
+}));
+["dragleave","drop"].forEach(ev => document.addEventListener(ev, e => {
+  e.preventDefault(); drop.classList.remove("hot");
+}));
+document.addEventListener("drop", e => {
+  const f = [...(e.dataTransfer?.files || [])].find(f => f.type.startsWith("image/"));
+  if (f) loadFile(f);
+});
+document.addEventListener("paste", e => {
+  const it = [...(e.clipboardData?.items || [])].find(i => i.type.startsWith("image/"));
+  if (it) loadFile(it.getAsFile());
+});
+
+function loadFile(file){
+  const url = URL.createObjectURL(file);
+  const im = new Image();
+  im.onload = () => {
+    URL.revokeObjectURL(url);
+    img = im;
+    ar = im.naturalWidth / im.naturalHeight;
+    sel = null;
+    shots = [FULL()]; activeShot = 0;
+    renderChips();
+    stopPreview();
+    drop.style.display = "none";
+    vf.style.display = "block";
+    fitCanvas();
+    for (const b of ["btnPreview","btnVideo","btnGif","btnReset"]) $(b).disabled = false;
+    setStatus("Full frame is shot 1. Draw to add shot 2 — remove FULL from the chips if you don't want it.");
+    $("roSrc").textContent = im.naturalWidth + "×" + im.naturalHeight;
+    refreshTotal();
+    updateReadout();
+  };
+  im.onerror = () => setStatus("Could not read that file as an image.");
+  im.src = url;
+}
+
+function fitCanvas(){
+  if (!img) return;
+  const maxW = vf.parentElement.clientWidth - 4;
+  const maxH = Math.max(240, window.innerHeight * 0.62);
+  scale = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight, 1);
+  vf.width  = Math.round(img.naturalWidth  * scale);
+  vf.height = Math.round(img.naturalHeight * scale);
+  draw();
+}
+window.addEventListener("resize", () => { stopPreview(); fitCanvas(); });
+
+/* ================= selection drawing ================= */
+function draw(){
+  if (!img) return;
+  vctx.clearRect(0,0,vf.width,vf.height);
+  vctx.drawImage(img, 0,0, vf.width, vf.height);
+
+  // shot sequence outlines
+  shots.forEach((sh, i) => {
+    if (sh.full) return;
+    const q = { x:sh.x*scale, y:sh.y*scale, w:sh.w*scale, h:sh.h*scale };
+    vctx.strokeStyle = i === activeShot ? "rgba(242,179,61,.95)" : "rgba(242,179,61,.45)";
+    vctx.lineWidth = 1;
+    vctx.setLineDash([4,4]);
+    vctx.strokeRect(q.x+.5, q.y+.5, q.w-1, q.h-1);
+    vctx.setLineDash([]);
+    vctx.fillStyle = "rgba(16,16,20,.8)";
+    vctx.fillRect(q.x+2, q.y+2, 16, 14);
+    vctx.fillStyle = "#f2b33d";
+    vctx.font = "10px ui-monospace,monospace";
+    vctx.fillText(String(i+1), q.x+6, q.y+13);
+  });
+
+  const r = sel;
+  if (!r) return;
+
+  const d = { x:r.x*scale, y:r.y*scale, w:r.w*scale, h:r.h*scale };
+
+  // dim outside
+  vctx.save();
+  vctx.beginPath();
+  vctx.rect(0,0,vf.width,vf.height);
+  vctx.rect(d.x, d.y, d.w, d.h);
+  vctx.fillStyle = "rgba(8,8,12,.62)";
+  vctx.fill("evenodd");
+  vctx.restore();
+
+  // frame
+  vctx.strokeStyle = "#f2b33d";
+  vctx.lineWidth = 1.5;
+  vctx.strokeRect(d.x+.5, d.y+.5, d.w-1, d.h-1);
+
+  // thirds
+  vctx.strokeStyle = "rgba(242,179,61,.28)";
+  vctx.lineWidth = 1;
+  vctx.beginPath();
+  for (let i=1;i<3;i++){
+    vctx.moveTo(d.x + d.w*i/3, d.y); vctx.lineTo(d.x + d.w*i/3, d.y+d.h);
+    vctx.moveTo(d.x, d.y + d.h*i/3); vctx.lineTo(d.x+d.w, d.y + d.h*i/3);
+  }
+  vctx.stroke();
+
+  // corner handles
+  vctx.fillStyle = "#f2b33d";
+  for (const [cx,cy] of corners(d)) vctx.fillRect(cx-4, cy-4, 8, 8);
+}
+const corners = d => [[d.x,d.y],[d.x+d.w,d.y],[d.x,d.y+d.h],[d.x+d.w,d.y+d.h]];
+
+function updateReadout(t){
+  $("roCrop").textContent = sel
+    ? `${Math.round(sel.x)},${Math.round(sel.y)} ${Math.round(sel.w)}×${Math.round(sel.h)}` : "—";
+  $("roZoom").textContent = sel ? (img.naturalWidth / sel.w).toFixed(2) + "×" : "—";
+  $("roT").textContent = t !== undefined ? t.toFixed(2) + "s"
+    : (lastTotal ? lastTotal.toFixed(1) + "s total" : "—");
+}
+
+/* ================= pointer interaction ================= */
+/* Single source of truth for what's under the pointer.
+   Returns {kind:'handle'|'sel'|'shot'|'empty', cursor, ...drag params} */
+function hitTest(p){
+  const ix = p.x / scale, iy = p.y / scale;
+
+  // corner handles of the active selection take priority
+  if (sel){
+    const d = { x:sel.x*scale, y:sel.y*scale, w:sel.w*scale, h:sel.h*scale };
+    const cs = corners(d);
+    for (let i=0;i<4;i++){
+      if (Math.hypot(p.x-cs[i][0], p.y-cs[i][1]) <= HANDLE){
+        return {
+          kind:"handle",
+          cursor: (i===0 || i===3) ? "nwse-resize" : "nesw-resize",
+          ax: cs[3-i][0]/scale, ay: cs[3-i][1]/scale
+        };
+      }
+    }
+  }
+
+  // otherwise the smallest region under the pointer wins (keeps nested rects reachable)
+  const inside = r => ix >= r.x && ix <= r.x + r.w && iy >= r.y && iy <= r.y + r.h;
+  let hit = null, area = Infinity;
+  if (sel && inside(sel)){ hit = { kind:"sel", r:sel }; area = sel.w * sel.h; }
+  shots.forEach((sh, i) => {
+    if (sh.full) return;
+    if (inside(sh) && sh.w * sh.h < area){ area = sh.w * sh.h; hit = { kind:"shot", index:i, r:sh }; }
+  });
+  if (hit) return { ...hit, cursor:"move", ox: ix - hit.r.x, oy: iy - hit.r.y };
+
+  return { kind:"empty", cursor:"crosshair", ix, iy };
+}
+
+vf.addEventListener("pointerdown", e => {
+  if (!img || busy) return;
+  stopPreview();
+  vf.setPointerCapture(e.pointerId);
+  const h = hitTest(toDisplay(e));
+
+  if (h.kind === "handle"){
+    drag = { mode:"size", ax:h.ax, ay:h.ay };
+  } else if (h.kind === "sel"){
+    drag = { mode:"move", ox:h.ox, oy:h.oy };
+  } else if (h.kind === "shot"){
+    activeShot = h.index;
+    sel = { ...shots[h.index] };
+    renderChips(); draw();
+    drag = { mode:"move", ox:h.ox, oy:h.oy };
+  } else {
+    // empty canvas → draw a new shot (added on release)
+    drag = { mode:"size", ax:h.ix, ay:h.iy, isNew:true };
+    sel = null;
+    activeShot = -1;
+    renderChips();
+  }
+});
+
+vf.addEventListener("pointermove", e => {
+  if (!img) { return; }
+  const p = toDisplay(e);
+  if (!drag){
+    vf.style.cursor = hoverCursor(p);
+    return;
+  }
+  if (drag.mode === "size"){
+    sel = arRect(drag.ax, drag.ay, p.x/scale, p.y/scale);
+  } else {
+    const nx = clamp(p.x/scale - drag.ox, 0, img.naturalWidth  - sel.w);
+    const ny = clamp(p.y/scale - drag.oy, 0, img.naturalHeight - sel.h);
+    sel = { ...sel, x:nx, y:ny };
+  }
+  if (activeShot >= 0 && shots[activeShot] && !shots[activeShot].full)
+    shots[activeShot] = { ...sel };
+  draw(); updateReadout();
+});
+
+["pointerup","pointercancel"].forEach(ev => vf.addEventListener(ev, () => {
+  if (drag && sel && (sel.w < 8 || sel.h < 8)) sel = null;   // reject tiny accidental rects
+  if (drag && drag.isNew && sel){
+    shots.push({ x:sel.x, y:sel.y, w:sel.w, h:sel.h });
+    activeShot = shots.length - 1;
+    renderChips();
+    setStatus("Shot " + shots.length + " added — drag or resize to adjust, × on a chip to remove.");
+  }
+  drag = null;
+  refreshTotal();
+  draw(); updateReadout();
+}));
+
+const hoverCursor = p => hitTest(p).cursor;
+
+function toDisplay(e){
+  const r = vf.getBoundingClientRect();
+  return { x:(e.clientX-r.left) * (vf.width/r.width), y:(e.clientY-r.top) * (vf.height/r.height) };
+}
+
+/* aspect-locked rect from anchor toward cursor, clamped to image */
+function arRect(ax, ay, cx, cy){
+  const sx = cx >= ax ? 1 : -1;
+  const sy = cy >= ay ? 1 : -1;
+  let w = Math.max(Math.abs(cx-ax), Math.abs(cy-ay) * ar);
+  // clamp so rect stays inside the image in the drag direction
+  const maxW = sx > 0 ? img.naturalWidth - ax : ax;
+  const maxH = sy > 0 ? img.naturalHeight - ay : ay;
+  w = Math.min(w, maxW, maxH * ar);
+  const h = w / ar;
+  return { x: sx>0 ? ax : ax-w, y: sy>0 ? ay : ay-h, w, h };
+}
+const clamp = (v,a,b) => Math.min(Math.max(v,a), b);
+
+$("btnReset").addEventListener("click", () => {
+  stopPreview(); sel = null; activeShot = -1;
+  renderChips(); draw(); updateReadout(); setStatus("");
+});
+
+/* ================= controls ================= */
+let dir = "in";
+$("dirSeg").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  dir = b.dataset.v;
+  [...$("dirSeg").children].forEach(x => x.classList.toggle("on", x===b));
+  refreshTotal();
+});
+$("dur").addEventListener("input", () => { $("durVal").textContent = (+$("dur").value).toFixed(1); refreshTotal(); });
+$("fps").addEventListener("input", () => $("fpsVal").textContent = $("fps").value);
+$("hold").addEventListener("input", () => { $("holdVal").textContent = (+$("hold").value).toFixed(1); refreshTotal(); });
+$("trans").addEventListener("change", refreshTotal);
+$("outW").addEventListener("change", refreshTotal);
+
+/* ---- shot list ---- */
+const FULL = () => ({ x:0, y:0, w:img.naturalWidth, h:img.naturalHeight, full:true });
+
+function moveShot(i, delta){
+  const j = i + delta;
+  if (j < 0 || j >= shots.length) return;
+  const [s0] = shots.splice(i, 1);
+  shots.splice(j, 0, s0);
+  activeShot = j;
+  renderChips(); refreshTotal(); draw();
+}
+
+function renderChips(){
+  const c = $("chips");
+  c.innerHTML = "";
+  if (!shots.length){
+    c.innerHTML = '<span class="chips-empty">draw on the image — each region becomes a shot</span>';
+    return;
+  }
+  shots.forEach((sh, i) => {
+    const chip = document.createElement("span");
+    chip.className = "chip" + (i === activeShot ? " on" : "");
+    const mkBtn = (cls, txt, title, fn) => {
+      const el = document.createElement("span");
+      el.className = cls; el.textContent = txt; el.title = title;
+      el.addEventListener("click", e => { e.stopPropagation(); fn(); });
+      return el;
+    };
+    if (i === activeShot && i > 0)
+      chip.appendChild(mkBtn("arw", "‹", "Move earlier", () => moveShot(i, -1)));
+    chip.append(sh.full ? "FULL" : String(i + 1));
+    if (i === activeShot && i < shots.length - 1)
+      chip.appendChild(mkBtn("arw", "›", "Move later", () => moveShot(i, +1)));
+    chip.appendChild(mkBtn("x", "×", "Remove shot", () => {
+      shots.splice(i, 1);
+      if (activeShot === i) activeShot = -1;
+      else if (activeShot > i) activeShot--;
+      renderChips(); refreshTotal(); draw();
+    }));
+    chip.addEventListener("click", () => {
+      activeShot = i;
+      if (!sh.full) sel = { ...sh };
+      renderChips(); draw(); updateReadout();
+    });
+    c.appendChild(chip);
+  });
+}
+
+$("addFull").addEventListener("click", () => {
+  if (!img) return;
+  shots.push(FULL());
+  activeShot = shots.length - 1;
+  sel = null;
+  renderChips(); refreshTotal(); draw();
+});
+$("dupShot").addEventListener("click", () => {
+  if (!img) return;
+  const base = (activeShot >= 0 && shots[activeShot] && !shots[activeShot].full) ? shots[activeShot] : sel;
+  if (!base){ setStatus("Select or draw a region to duplicate."); return; }
+  const off = Math.min(base.w * 0.2, 60);
+  const copy = {
+    x: clamp(base.x + off, 0, img.naturalWidth  - base.w),
+    y: clamp(base.y + off, 0, img.naturalHeight - base.h),
+    w: base.w, h: base.h
+  };
+  shots.push(copy);
+  activeShot = shots.length - 1;
+  sel = { ...copy };
+  renderChips(); refreshTotal(); draw();
+  setStatus("Duplicated — drag the copy to set the pan.");
+});
+$("clrShots").addEventListener("click", () => {
+  shots = [FULL()]; activeShot = 0; sel = null;
+  renderChips(); refreshTotal(); draw();
+});
+renderChips();
+
+function refreshTotal(){
+  const tl = img ? buildTimeline() : null;
+  lastTotal = tl ? tl.total : 0;
+  $("seqTotal").textContent = tl
+    ? (shots.length ? shots.length + " shots · " : "") + tl.total.toFixed(1) + "s"
+    : "";
+
+  // upscale warning: output width vs the tightest region in the sequence
+  const warn = $("roWarn");
+  const regions = img ? shots.filter(sh => !sh.full) : [];
+  if (regions.length){
+    const minW = Math.min(...regions.map(r => r.w));
+    const outWv = Math.min(+$("outW").value || img.naturalWidth, img.naturalWidth);
+    const f = outWv / minW;
+    if (f > 1.05){
+      warn.style.display = "";
+      warn.textContent = "⚠ " + f.toFixed(1) + "× upscale";
+      warn.title = "Tightest shot is " + Math.round(minW) + "px wide but output is " + outWv +
+                   "px — the zoomed-in frames will be soft. Draw a larger region or lower the output width.";
+    } else warn.style.display = "none";
+  } else warn.style.display = "none";
+
+  updateReadout();
+}
+
+const EASE = {
+  linear: t => t,
+  in:     t => t*t*t,
+  out:    t => 1 - Math.pow(1-t, 3),
+  inout:  t => t<.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2,3)/2
+};
+
+function settings(){
+  const w = +$("outW").value || img.naturalWidth;
+  const outWpx = Math.min(w, img.naturalWidth);
+  const outHpx = Math.round(outWpx / ar / 2) * 2;   // even for encoders
+  return {
+    dur: +$("dur").value,
+    fps: +$("fps").value,
+    hold: +$("hold").value,
+    ease: EASE[$("ease").value],
+    W: Math.round(outWpx / 2) * 2,
+    H: outHpx
+  };
+}
+
+/* ================= sequence timeline ================= */
+/* Resolve what to play: an explicit shot list, or the classic quick move. */
+function sequence(){
+  if (!img) return null;
+  if (shots.length >= 2) return shots;
+  const single = shots.length === 1
+    ? (shots[0].full ? null : shots[0])
+    : sel;
+  if (!single) return null;
+  return dir === "in" ? [FULL(), single] : [single, FULL()];
+}
+
+/* Build [{kind:'hold'|'move'|'fade', a, b?, t0, dur}] with cumulative times. */
+function buildTimeline(){
+  const seq = sequence(); if (!seq) return null;
+  const s = settings();
+  const trans = $("trans").value;
+  const dwell = (trans === "cut" && s.hold <= 0) ? 0.6 : s.hold;   // cuts need something to cut between
+  const segs = [];
+  seq.forEach((shot, i) => {
+    if (dwell > 0) segs.push({ kind:"hold", a:shot, dur:dwell });
+    if (i < seq.length - 1 && trans !== "cut")
+      segs.push({ kind: trans === "fade" ? "fade" : "move", a:shot, b:seq[i+1], dur: Math.max(0.1, s.dur) });
+  });
+  if (!segs.length) segs.push({ kind:"hold", a:seq[seq.length-1], dur:1 });
+  let t = 0;
+  for (const g of segs){ g.t0 = t; t += g.dur; }
+  return { segs, total: t, ease: s.ease };
+}
+
+/* interpolated crop between two rects: exponential size = constant-rate zoom */
+function cropBetween(a, b, tt){
+  const w = a.w * Math.pow(b.w / a.w, tt);
+  const h = w / ar;
+  const cx = (a.x + a.w/2) + ((b.x + b.w/2) - (a.x + a.w/2)) * tt;
+  const cy = (a.y + a.h/2) + ((b.y + b.h/2) - (a.y + a.h/2)) * tt;
+  return {
+    x: clamp(cx - w/2, 0, img.naturalWidth  - w),
+    y: clamp(cy - h/2, 0, img.naturalHeight - h),
+    w, h
+  };
+}
+
+function drawCrop(ctx, W, H, c){
+  ctx.drawImage(img, c.x, c.y, c.w, c.h, 0, 0, W, H);
+}
+
+/* Render the composited frame at absolute time tSec. */
+function renderAtTime(ctx, W, H, tSec, tl){
+  const t = Math.min(Math.max(tSec, 0), tl.total - 1e-4);
+  let seg = tl.segs[tl.segs.length - 1];
+  for (const g of tl.segs){
+    if (t < g.t0 + g.dur){ seg = g; break; }
+  }
+  ctx.imageSmoothingQuality = "high";
+  if (seg.kind === "hold"){ drawCrop(ctx, W, H, seg.a); return; }
+  const tt = tl.ease((t - seg.t0) / seg.dur);
+  if (seg.kind === "fade"){
+    drawCrop(ctx, W, H, seg.a);
+    ctx.globalAlpha = tt;
+    drawCrop(ctx, W, H, seg.b);
+    ctx.globalAlpha = 1;
+  } else {
+    drawCrop(ctx, W, H, cropBetween(seg.a, seg.b, tt));
+  }
+}
+
+function requireSel(){
+  if (!sequence()){ setStatus("Draw a region (and optionally add shots) first."); return false; }
+  return true;
+}
+
+/* ================= preview (in viewfinder) ================= */
+$("btnPreview").addEventListener("click", () => {
+  if (!requireSel() || busy) return;
+  stopPreview();
+  const tl = buildTimeline(); if (!tl) return;
+  const t0 = performance.now();
+  const step = now => {
+    const el = (now - t0) / 1000;
+    renderAtTime(vctx, vf.width, vf.height, el, tl);
+    updateReadout(Math.min(el, tl.total));
+    if (el < tl.total) previewRAF = requestAnimationFrame(step);
+    else { previewRAF = 0; draw(); updateReadout(); }
+  };
+  previewRAF = requestAnimationFrame(step);
+});
+function stopPreview(){ if (previewRAF){ cancelAnimationFrame(previewRAF); previewRAF = 0; if (img) draw(); } }
+
+/* ================= status / progress ================= */
+function setStatus(t){ $("status").textContent = t; }
+function setProgress(p){
+  $("prog").style.display = p == null ? "none" : "block";
+  if (p != null) $("progBar").style.width = (p*100).toFixed(1) + "%";
+}
+function lock(v){
+  busy = v;
+  for (const b of ["btnPreview","btnVideo","btnGif","btnReset"]) $(b).disabled = v || !img;
+}
+
+function showOutput(title, el, blob, filename){
+  $("monitor").style.display = "block";
+  $("monTitle").textContent = title;
+  const media = $("media"); media.innerHTML = ""; media.appendChild(el);
+  const dl = $("dl"); dl.innerHTML = "";
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.textContent = "Download " + filename + "  (" + (blob.size/1048576).toFixed(2) + " MB)";
+  dl.appendChild(a);
+  $("monitor").scrollIntoView({ behavior:"smooth", block:"nearest" });
+}
+
+/* ================= video export ================= */
+$("btnVideo").addEventListener("click", async () => {
+  if (!requireSel() || busy) return;
+  stopPreview(); lock(true);
+  try {
+    const s = settings();
+    const handled = ("VideoEncoder" in window) && await renderVideoExact(s);
+    if (!handled) await renderVideoRealtime(s);
+  } catch (err){
+    console.error(err);
+    setStatus("Video render failed: " + ((err && err.message) || err));
+  }
+  setProgress(null); lock(false);
+});
+
+function presentVideo(blob, ext, s){
+  const video = document.createElement("video");
+  video.controls = true; video.loop = true; video.muted = true;
+  video.autoplay = true; video.playsInline = true;
+  video.src = URL.createObjectURL(blob);
+  showOutput("Video · " + s.W + "×" + s.H + " · " + s.fps + " fps", video, blob, "dolly." + ext);
+  setStatus("Done.");
+}
+
+/* --- path A: WebCodecs. Frames are rendered and timestamped exactly on the
+   fps grid (not sampled from a live canvas in wall-clock time), then muxed
+   into WebM by the writer below. This is what removes the stutter. --- */
+async function renderVideoExact(s){
+  const candidates = [["vp09.00.10.08","V_VP9"], ["vp8","V_VP8"]];
+  let codec = null, codecId = null;
+  for (const [c, id] of candidates){
+    try {
+      const q = await VideoEncoder.isConfigSupported({ codec:c, width:s.W, height:s.H });
+      if (q.supported){ codec = c; codecId = id; break; }
+    } catch(_) {}
+  }
+  if (!codec) return false;   // e.g. Safari (H.264 only) → realtime fallback
+
+  const cv = document.createElement("canvas");
+  cv.width = s.W; cv.height = s.H;
+  const ctx = cv.getContext("2d");
+
+  const tl = buildTimeline();
+  const nFrames = Math.max(2, Math.round(tl.total * s.fps));
+  const kf = Math.max(1, Math.round(s.fps));   // keyframe every ~1s
+
+  const chunks = [];
+  let encErr = null;
+  const enc = new VideoEncoder({
+    output: c => {
+      const data = new Uint8Array(c.byteLength);
+      c.copyTo(data);
+      chunks.push({ key: c.type === "key", ms: Math.round(c.timestamp / 1000), data });
+    },
+    error: e => { encErr = e; }
+  });
+  enc.configure({ codec, width: s.W, height: s.H, bitrate: 8_000_000, framerate: s.fps });
+
+  setStatus("Encoding video…");
+  for (let f = 0; f < nFrames; f++){
+    if (encErr) throw encErr;
+    renderAtTime(ctx, s.W, s.H, f / s.fps, tl);
+    const frame = new VideoFrame(cv, {
+      timestamp: Math.round(f * 1e6 / s.fps),
+      duration:  Math.round(1e6 / s.fps)
+    });
+    enc.encode(frame, { keyFrame: f % kf === 0 });
+    frame.close();
+    setProgress((f + 1) / nFrames);
+    while (enc.encodeQueueSize > 6) await tick();   // don't outrun the encoder
+    if ((f & 3) === 0) await tick();                // keep the UI alive
+  }
+  await enc.flush();
+  enc.close();
+  if (encErr) throw encErr;
+
+  const blob = muxWebM(chunks, s.W, s.H, codecId, nFrames * 1000 / s.fps);
+  presentVideo(blob, "webm", s);
+  return true;
+}
+
+/* --- path B: realtime MediaRecorder fallback for browsers without WebCodecs --- */
+async function renderVideoRealtime(s){
+  const cv = document.createElement("canvas");
+  cv.width = s.W; cv.height = s.H;
+  const ctx = cv.getContext("2d");
+
+  const mime = ["video/webm;codecs=vp9","video/webm;codecs=vp8","video/webm","video/mp4"]
+    .find(m => window.MediaRecorder && MediaRecorder.isTypeSupported(m));
+  if (!mime){ setStatus("This browser can't record video. Use the GIF export instead."); return; }
+  const ext = mime.startsWith("video/mp4") ? "mp4" : "webm";
+
+  const tl = buildTimeline();
+  renderAtTime(ctx, s.W, s.H, 0, tl);
+  const stream = cv.captureStream(s.fps);
+  const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 8_000_000 });
+  const chunks = [];
+  rec.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+  const done = new Promise(res => rec.onstop = res);
+  rec.start();
+  setStatus("Recording " + ext.toUpperCase() + "… (realtime fallback)");
+
+  const t0 = performance.now();
+  const total = tl.total * 1000;
+  await new Promise(res => {
+    const step = now => {
+      const el = now - t0;
+      renderAtTime(ctx, s.W, s.H, el / 1000, tl);
+      setProgress(clamp(el / total, 0, 1));
+      if (el < total) requestAnimationFrame(step); else res();
+    };
+    requestAnimationFrame(step);
+  });
+  rec.stop();
+  await done;
+  presentVideo(new Blob(chunks, { type: mime.split(";")[0] }), ext, s);
+}
+
+/* ---- minimal EBML / WebM muxer (video-only, SimpleBlocks) ---- */
+const U = (...b) => Uint8Array.of(...b);
+function cat(...parts){
+  let len = 0; for (const p of parts) len += p.length;
+  const out = new Uint8Array(len);
+  let o = 0; for (const p of parts){ out.set(p, o); o += p.length; }
+  return out;
+}
+function euint(n){                       // minimal big-endian unsigned int
+  const b = []; do { b.unshift(n % 256); n = Math.floor(n / 256); } while (n > 0);
+  return Uint8Array.from(b);
+}
+function evint(n){                       // EBML size field
+  let len = 1;
+  while (n > Math.pow(2, 7 * len) - 2) len++;
+  const b = new Uint8Array(len);
+  let v = n;
+  for (let i = len - 1; i >= 0; i--){ b[i] = v % 256; v = Math.floor(v / 256); }
+  b[0] |= 0x80 >> (len - 1);
+  return b;
+}
+const eel  = (id, payload) => cat(id, evint(payload.length), payload);
+const estr = str => new TextEncoder().encode(str);
+function ef64(n){
+  const b = new Uint8Array(8);
+  new DataView(b.buffer).setFloat64(0, n);
+  return b;
+}
+
+function muxWebM(chunks, W, H, codecId, durMs){
+  const header = eel(U(0x1A,0x45,0xDF,0xA3), cat(
+    eel(U(0x42,0x86), euint(1)),          // EBMLVersion
+    eel(U(0x42,0xF7), euint(1)),          // EBMLReadVersion
+    eel(U(0x42,0xF2), euint(4)),          // EBMLMaxIDLength
+    eel(U(0x42,0xF3), euint(8)),          // EBMLMaxSizeLength
+    eel(U(0x42,0x82), estr("webm")),      // DocType
+    eel(U(0x42,0x87), euint(2)),
+    eel(U(0x42,0x85), euint(2))
+  ));
+  const info = eel(U(0x15,0x49,0xA9,0x66), cat(
+    eel(U(0x2A,0xD7,0xB1), euint(1000000)),   // TimestampScale = 1 ms
+    eel(U(0x44,0x89), ef64(durMs)),           // Duration
+    eel(U(0x4D,0x80), estr("Dolly")),
+    eel(U(0x57,0x41), estr("Dolly"))
+  ));
+  const tracks = eel(U(0x16,0x54,0xAE,0x6B),
+    eel(U(0xAE), cat(
+      eel(U(0xD7),      euint(1)),        // TrackNumber
+      eel(U(0x73,0xC5), euint(1)),        // TrackUID
+      eel(U(0x83),      euint(1)),        // TrackType: video
+      eel(U(0x86),      estr(codecId)),   // CodecID
+      eel(U(0xE0), cat(                   // Video
+        eel(U(0xB0), euint(W)),
+        eel(U(0xBA), euint(H))
+      ))
+    ))
+  );
+  const clusters = [];
+  let blocks = [], base = 0;
+  const flushCluster = () => {
+    if (!blocks.length) return;
+    clusters.push(eel(U(0x1F,0x43,0xB6,0x75),
+      cat(eel(U(0xE7), euint(base)), ...blocks)));
+    blocks = [];
+  };
+  for (const c of chunks){
+    if ((c.key && blocks.length) || c.ms - base > 30000) flushCluster();
+    if (!blocks.length) base = c.ms;
+    const rel = c.ms - base;
+    blocks.push(eel(U(0xA3),
+      cat(U(0x81, (rel >> 8) & 0xFF, rel & 0xFF, c.key ? 0x80 : 0x00), c.data)));
+  }
+  flushCluster();
+  const segment = eel(U(0x18,0x53,0x80,0x67), cat(info, tracks, ...clusters));
+  return new Blob([header, segment], { type: "video/webm" });
+}
+
+/* ================= GIF export (built-in GIF89a encoder) ================= */
+$("btnGif").addEventListener("click", async () => {
+  if (!requireSel() || busy) return;
+  stopPreview(); lock(true);
+  const s = settings();
+  const fps = Math.min(s.fps, 30);                       // GIF delay granularity
+  const delay = Math.max(2, Math.round(100 / fps));      // hundredths of a second
+  const tl = buildTimeline();
+  const nFrames = Math.max(2, Math.round(tl.total * fps));
+
+  const cv = document.createElement("canvas");
+  cv.width = s.W; cv.height = s.H;
+  const ctx = cv.getContext("2d", { willReadFrequently: true });
+
+  // ---- pass 1: sample colors from start / mid / end for a global palette
+  setStatus("Building palette…"); setProgress(0);
+  const samples = [];
+  for (const ts of [0, tl.total / 2, tl.total]) {
+    renderAtTime(ctx, s.W, s.H, ts, tl);
+    const d = ctx.getImageData(0,0,s.W,s.H).data;
+    const stride = Math.max(4, Math.floor(d.length / 4 / 12000)) * 4;
+    for (let i = 0; i < d.length; i += stride) samples.push([d[i], d[i+1], d[i+2]]);
+    await tick();
+  }
+  const palette = medianCut(samples, 256);
+  const nearest = makeNearest(palette);
+  const ditherOn = $("dither").checked;
+
+  // ---- pass 2: render + encode frames
+  const bytes = [];
+  writeGifHeader(bytes, s.W, s.H, palette);
+  for (let f = 0; f < nFrames; f++){
+    renderAtTime(ctx, s.W, s.H, f / fps, tl);
+    const d = ctx.getImageData(0,0,s.W,s.H).data;
+    const idx = ditherOn
+      ? fsDither(d, s.W, s.H, palette, nearest)
+      : mapDirect(d, nearest);
+    writeGifFrame(bytes, s.W, s.H, idx, delay);
+    setStatus("Encoding GIF frame " + (f+1) + "/" + nFrames);
+    setProgress((f+1)/nFrames);
+    await tick();
+  }
+  bytes.push(0x3B); // trailer
+
+  const blob = new Blob([Uint8Array.from(bytes)], { type: "image/gif" });
+  const im = document.createElement("img");
+  im.src = URL.createObjectURL(blob);
+  im.alt = "Rendered zoom GIF";
+  showOutput("GIF · " + s.W + "×" + s.H + " · " + fps + " fps · " + nFrames + " frames", im, blob, "dolly.gif");
+  setStatus("Done."); setProgress(null); lock(false);
+});
+
+const tick = () => new Promise(r => requestAnimationFrame(r));
+
+/* ---- median-cut quantizer -> [[r,g,b] x ≤256] padded to 256 */
+function medianCut(pixels, n){
+  let boxes = [pixels];
+  while (boxes.length < n){
+    boxes.sort((a,b) => boxRange(b) - boxRange(a));
+    const box = boxes.shift();
+    if (!box || box.length < 2 || boxRange(box) === 0){ if (box) boxes.push(box); break; }
+    const ch = widestChannel(box);
+    box.sort((a,b) => a[ch] - b[ch]);
+    const mid = box.length >> 1;
+    boxes.push(box.slice(0, mid), box.slice(mid));
+  }
+  const pal = boxes.map(box => {
+    let r=0,g=0,b=0;
+    for (const p of box){ r+=p[0]; g+=p[1]; b+=p[2]; }
+    const L = box.length || 1;
+    return [Math.round(r/L), Math.round(g/L), Math.round(b/L)];
+  });
+  while (pal.length < 256) pal.push([0,0,0]);
+  return pal.slice(0, 256);
+}
+function channelRanges(box){
+  const mn=[255,255,255], mx=[0,0,0];
+  for (const p of box) for (let c=0;c<3;c++){ if(p[c]<mn[c])mn[c]=p[c]; if(p[c]>mx[c])mx[c]=p[c]; }
+  return [mx[0]-mn[0], mx[1]-mn[1], mx[2]-mn[2]];
+}
+const boxRange = box => Math.max(...channelRanges(box));
+function widestChannel(box){ const r = channelRanges(box); return r.indexOf(Math.max(...r)); }
+
+/* ---- pixel → palette-index mapping, plain or error-diffused */
+function mapDirect(data, nearest){
+  const idx = new Uint8Array(data.length / 4);
+  for (let i = 0, p = 0; i < idx.length; i++, p += 4)
+    idx[i] = nearest(data[p], data[p+1], data[p+2]);
+  return idx;
+}
+/* Floyd–Steinberg: push each pixel's quantization error onto its unvisited
+   neighbors (7/16 →, 3/16 ↙, 5/16 ↓, 1/16 ↘) so gradients dissolve into
+   noise instead of banding. */
+function fsDither(data, W, H, pal, nearest){
+  const idx = new Uint8Array(W * H);
+  const buf = new Float32Array(W * H * 3);
+  for (let i = 0, p = 0; i < W * H; i++, p += 4){
+    buf[i*3] = data[p]; buf[i*3+1] = data[p+1]; buf[i*3+2] = data[p+2];
+  }
+  const cl = v => v < 0 ? 0 : v > 255 ? 255 : v;
+  for (let y = 0; y < H; y++){
+    for (let x = 0; x < W; x++){
+      const i = (y * W + x) * 3;
+      const r = cl(buf[i]), g = cl(buf[i+1]), b = cl(buf[i+2]);
+      const pi = nearest(Math.round(r), Math.round(g), Math.round(b));
+      idx[y * W + x] = pi;
+      const er = r - pal[pi][0], eg = g - pal[pi][1], eb = b - pal[pi][2];
+      if (x + 1 < W){
+        buf[i+3] += er * 7/16; buf[i+4] += eg * 7/16; buf[i+5] += eb * 7/16;
+      }
+      if (y + 1 < H){
+        const j = ((y + 1) * W + x) * 3;
+        if (x > 0){ buf[j-3] += er * 3/16; buf[j-2] += eg * 3/16; buf[j-1] += eb * 3/16; }
+        buf[j] += er * 5/16; buf[j+1] += eg * 5/16; buf[j+2] += eb * 5/16;
+        if (x + 1 < W){ buf[j+3] += er * 1/16; buf[j+4] += eg * 1/16; buf[j+5] += eb * 1/16; }
+      }
+    }
+  }
+  return idx;
+}
+
+/* ---- cached nearest-color lookup (5 bits/channel buckets) */
+function makeNearest(pal){
+  const cache = new Int16Array(32768).fill(-1);
+  return (r,g,b) => {
+    const key = ((r>>3)<<10) | ((g>>3)<<5) | (b>>3);
+    let v = cache[key];
+    if (v >= 0) return v;
+    let best = 0, bd = Infinity;
+    for (let i = 0; i < pal.length; i++){
+      const dr = pal[i][0]-r, dg = pal[i][1]-g, db = pal[i][2]-b;
+      const d = dr*dr + dg*dg*2 + db*db;   // weight green slightly (perception)
+      if (d < bd){ bd = d; best = i; }
+    }
+    cache[key] = best;
+    return best;
+  };
+}
+
+/* ---- GIF89a writer */
+function writeGifHeader(out, W, H, pal){
+  for (const c of "GIF89a") out.push(c.charCodeAt(0));
+  out.push(W & 255, W >> 8, H & 255, H >> 8);
+  out.push(0xF7, 0, 0);                       // GCT, 8-bit, 256 colors
+  for (const [r,g,b] of pal) out.push(r,g,b);
+  // Netscape loop-forever extension
+  out.push(0x21, 0xFF, 0x0B);
+  for (const c of "NETSCAPE2.0") out.push(c.charCodeAt(0));
+  out.push(0x03, 0x01, 0x00, 0x00, 0x00);
+}
+function writeGifFrame(out, W, H, indices, delay){
+  out.push(0x21, 0xF9, 0x04, 0x04, delay & 255, delay >> 8, 0x00, 0x00);   // GCE
+  out.push(0x2C, 0,0, 0,0, W & 255, W >> 8, H & 255, H >> 8, 0x00);        // image descriptor
+  lzw(indices, out);
+}
+/* LZW with variable code size, clear at 4096 (omggif-style logic) */
+function lzw(pixels, out){
+  const minCode = 8;
+  out.push(minCode);
+  const CLEAR = 1 << minCode, EOI = CLEAR + 1;
+  let next = EOI + 1, codeSize = minCode + 1;
+  let cur = 0, bits = 0;
+  const data = [];
+  const emit = code => {
+    cur |= code << bits; bits += codeSize;
+    while (bits >= 8){ data.push(cur & 0xFF); cur >>= 8; bits -= 8; }
+  };
+  let table = new Map();
+  emit(CLEAR);
+  let prev = pixels[0];
+  for (let i = 1; i < pixels.length; i++){
+    const p = pixels[i];
+    const key = (prev << 8) | p;
+    const v = table.get(key);
+    if (v !== undefined){ prev = v; continue; }
+    emit(prev);
+    if (next === 4096){
+      emit(CLEAR);
+      next = EOI + 1; codeSize = minCode + 1; table = new Map();
+    } else {
+      if (next >= (1 << codeSize)) codeSize++;
+      table.set(key, next++);
+    }
+    prev = p;
+  }
+  emit(prev); emit(EOI);
+  if (bits > 0) data.push(cur & 0xFF);
+  // sub-blocks
+  for (let i = 0; i < data.length; i += 255){
+    const n = Math.min(255, data.length - i);
+    out.push(n);
+    for (let j = 0; j < n; j++) out.push(data[i + j]);
+  }
+  out.push(0x00);
+}
+</script>
+</body>
+</html>
