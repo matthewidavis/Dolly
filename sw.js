@@ -7,7 +7,7 @@
  * returning visitors, so without a new cache name a push goes unseen —
  * the classic way a PWA ships an update nobody receives.
  */
-const CACHE = "dolly-v2";   // v2: the redesigned app (projects, export queue, motion, look & frame)
+const CACHE = "dolly-v3";   // v3: desktop layout (tool rail, full-width picture, Project panel, shortcuts)
 
 const SHELL = [
   "./",

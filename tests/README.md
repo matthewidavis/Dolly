@@ -1,6 +1,6 @@
 # Dolly test kit
 
-Automated checks for `dolly.html`: 32 functional suites plus a before/after pixel comparison.
+Automated checks for `dolly.html`: 33 functional suites plus a before/after pixel comparison.
 They drive a real browser (Chromium, headless) through Playwright: loading media, tapping,
 multi-touch gestures, playback, exports decoded back frame by frame, reloads for recovery.
 
@@ -17,7 +17,7 @@ In the repository these tests live in `tests/` and target `../index.html` automa
 ## Run
 
 ```bash
-./run_all.sh                 # everything (several minutes); prints "clean: 32 of 32"
+./run_all.sh                 # everything (several minutes); prints "clean: 33 of 33"
 ./run_all.sh styletest       # one suite (or several, space-separated)
 python3 cssdiff.py           # pixel comparison against reference/dolly-reference.html
 ```
@@ -79,6 +79,7 @@ checks (and says so); WebM export is covered by the other suites either way.
 | looktest | grade presets (measured effect), strength, grain, vignette, cinema bars, exports match preview |
 | paneltest | pinned panel headers, accordion sections (one open, remembered, live summaries) |
 | docktest | phone panels: one fixed height over the timeline and tray, picture and controls never covered |
+| desktest | desktop layout (rail, full width, Project panel), keyboard shortcuts and when they must not fire, resizing |
 
 ## Notes
 

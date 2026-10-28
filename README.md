@@ -33,6 +33,21 @@ between them, then exports the result as MP4, WebM or GIF.
   the device and come back after a reload. Projects can be saved as small files and
   reused as templates on other images.
 
+## On desktop
+
+At 1000px and wider the same app lays out for a big screen: tools in a rail on the left,
+the picture using the whole window, and a side panel that shows the selected shot or move,
+or the project's Timing and Look settings when nothing is selected.
+
+| Key | Action |
+| --- | --- |
+| Space | Play / pause |
+| ← ↑ → ↓ | Nudge the selected shot (Shift: ×10) |
+| Delete | Remove the selected shot |
+| Ctrl/⌘ + D | Duplicate the selected shot |
+| Ctrl/⌘ + Z, Shift + Ctrl/⌘ + Z | Undo, redo |
+| Esc | Close the panel / deselect |
+
 ## Install it
 
 Dolly is a PWA, so you can install it to your home screen or desktop and it runs
@@ -85,13 +100,13 @@ projects are autosaved, and Dolly warns first if an export is unfinished.
 
 ## Tests
 
-`tests/` holds 32 automated suites (Playwright, headless Chromium) plus a before/after
+`tests/` holds 33 automated suites (Playwright, headless Chromium) plus a before/after
 pixel comparison. See [`tests/README.md`](tests/README.md).
 
 ```
 pip install playwright pillow
 python -m playwright install chromium
-cd tests && ./run_all.sh          # prints "clean: 32 of 32"
+cd tests && ./run_all.sh          # prints "clean: 33 of 33"
 ```
 
 Run them before every push; run `python3 cssdiff.py` after any stylesheet change.

@@ -6,7 +6,7 @@
 cd "$(dirname "$0")"
 SUITES="uitest reordertest playheadtest gesturetest rotatetest cornertest autoplaytest undotest projtest projectstest
 recoverytest queuetest pintest giftest videotest fittest naturaltest soundtest motiontest mp4test lighttest
-motionpathtest styletest lifetest flowtest leaktest arctest curvetest frametest looktest paneltest docktest"
+motionpathtest styletest lifetest flowtest leaktest arctest curvetest frametest looktest paneltest docktest desktest"
 [ $# -gt 0 ] && SUITES="$*"
 mkdir -p out/logs
 pass=0; fail=0; failed=""

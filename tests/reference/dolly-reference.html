@@ -35,6 +35,12 @@ A QUICK TOUR OF THE APP
                row summarising its settings, the last one used remembered).
   Projects     several projects stay open; exports queue in the background, one at
                a time, with pause/stop; open projects are autosaved on the device.
+  Desktop      (1000px and wider) the same app laid out for a big screen: the tray
+               becomes a rail on the left, the picture uses the whole window, and
+               the side panel shows the selected item, or the project's Timing and
+               Look settings when nothing is selected. Keyboard: Space play/pause;
+               with a shot selected, arrows nudge it (Shift x10), Delete removes it,
+               Ctrl/Cmd+D duplicates it; Ctrl/Cmd+Z / Shift+Z undo and redo.
 
 HOW THE CODE IS LAID OUT
   Everything lives in this file (index.html in the repository): the stylesheet, the markup,
@@ -129,6 +135,9 @@ KNOWN LIMITS
   Finished exports aren't kept across a reload (Dolly warns before you leave).
 
 DESIGN PRINCIPLES (keep them)
+  Phones come first: desktop-only changes live in the "desktop (1000px and wider)"
+  style block or behind docked(), and phone screens must stay pixel-identical
+  (tests/cssdiff.py checks).
   One fixed screen that never scrolls under your finger.  Select → the tray shows
   that item's tools → small focused panels.  Every action has a visible control;
   gestures are extras.  Technical settings live one level deeper.  Plain language
@@ -566,6 +575,24 @@ DESIGN PRINCIPLES (keep them)
             font-size:.86rem;box-shadow:0 8px 24px rgba(0,0,0,.35)}
   #swUpdate button{min-height:36px;padding:0 14px;border-radius:9px;border:none;background:var(--amber-fill);color:var(--on-fill);font-weight:700;cursor:pointer}
   #swUpdate button.later{background:none;color:#c9cbd3;font-weight:500}
+  /* ================= desktop (1000px and wider) =================
+     The picture is the hero: the app uses the whole window, the tools sit in a slim rail on the
+     left, and the side panel always holds something useful. None of this reaches phones. */
+  @media (min-width:1000px){
+    body{max-width:none;display:grid;grid-template-columns:88px minmax(0,1fr);grid-template-rows:auto minmax(0,1fr)}
+    header.top{grid-column:1 / -1;padding:8px 18px 6px 14px}
+    .workspace{grid-column:2;grid-row:2;grid-template-columns:minmax(0,1fr) clamp(340px,24vw,420px);gap:16px;padding:0 18px 16px 4px}
+    .tray{grid-column:1;grid-row:2;flex-direction:column;justify-content:flex-start;background:none;border-top:none;padding:2px 8px 16px}
+    .tray-set{flex:none;flex-direction:column;gap:4px;overflow:visible}
+    .tray-btn,.tray-set .tray-btn{flex:none;width:100%;min-height:66px;min-width:0;border-radius:14px;font-size:.76rem}
+    .tray-btn.on{background:var(--panel)}
+    #trayShotSet,#trayMoveSet{display:none}              /* on desktop the side panel holds a selection's actions */
+    .tray .progress{left:8px;right:8px;top:-2px}
+    #dlgJobs,#dlgMenu{margin:66px auto auto 96px}       /* under the project name and the rail, where they're opened */
+    #dlgJobs{width:min(720px,calc(100vw - 120px))}
+    .proj-group{font-family:var(--mono);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:14px 0 4px}
+    .proj-group:first-of-type{margin-top:4px}
+  }
   @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}</style>
 </head>
 <body>
@@ -1058,6 +1085,14 @@ DESIGN PRINCIPLES (keep them)
      buttons misfire. Mouse/pen stay on the canvas.
    - Toasts sit at the top with pointer-events:none (only their link takes taps);
      at the bottom they blocked the strip.
+   - Desktop (docked(): 1000px and wider) is layout only: one CSS block at the end of the
+     stylesheet turns body into a grid (rail | workspace), and the tray keeps its main tools
+     (selection actions live in the docked panel). With nothing selected the panel is the
+     Project panel (buildProjectPanel: Timing + Look sections, one open across both).
+     Phones must stay pixel-identical; run cssdiff.py after any desktop change.
+   - renderInspector rebuilds the panel on every refresh; it restores keyboard focus to the
+     same control (by id, else by position among controls of the same kind). Without that,
+     an arrow key on a slider dropped focus to the page and a following Delete removed the shot.
    - Phone panels have a fixed height, var(--dock-h): from the timeline's top to the
      screen's bottom (updateDockH, kept current by ResizeObservers). Never let a panel
      grow with its content; it scrolls instead (the header is position:sticky).
@@ -1154,7 +1189,7 @@ new ResizeObserver(updateBarH).observe($("actionbar"));
 new ResizeObserver(updateDockH).observe($("actionbar"));
 new ResizeObserver(updateSheetH).observe($("inspector"));
 $("inspector").addEventListener("scroll", e => e.currentTarget.classList.toggle("scrolled", e.currentTarget.scrollTop > 2), { passive: true });
-if (window.matchMedia) matchMedia("(min-width: 1000px)").addEventListener("change", () => { renderInspector(); updateSheetH(); if (src) fitCanvas(); });
+if (window.matchMedia) matchMedia("(min-width: 1000px)").addEventListener("change", () => { renderInspector(); updateSheetH(); if (src){ fitCanvas(); updateTray(); } });
 
 /* custom sliders draw their filled part from --fill */
 function syncRange(r){
@@ -3871,7 +3906,8 @@ const shotMode = () => !!src && activeShot >= 0 && selLink < 0 && !!shots[active
 const moveMode = () => !!src && selLink >= 0 && selLink < shots.length - 1;
 function updateTray(){
   const on = shotMode(), mv = moveMode();
-  $("trayMain").hidden = on || mv; $("trayShotSet").hidden = !on; $("trayMoveSet").hidden = !mv;
+  const desk = docked();
+  $("trayMain").hidden = (on || mv) && !desk; $("trayShotSet").hidden = !on || desk; $("trayMoveSet").hidden = !mv || desk;
   for (const [id, t] of [["toolHold", "hold"], ["toolDwell", "dwell"], ["moveTrans", "trans"], ["moveDur", "dur"], ["moveStyle", "style"], ["moveArc", "arc"]])
     $(id).classList.toggle("on", toolPanel === t);
   if (mv){
@@ -3949,6 +3985,7 @@ const shotName = j => shots[j].full ? "FULL" : String(j + 1);
 /* Timing and Look group their settings in accordion sections: closed by default, one open at a
    time, each row summarising its current settings; the panel remembers the section last opened. */
 const accOpen = {};                                         // panel id → key of its open section (or none)
+let accLast = null;                                         // the panel whose section was opened most recently
 function makeAccordion(secId, groups){
   const sec = $(secId), fieldOf = id => $(id).closest(".field");
   for (const [key, title, ids] of groups){
@@ -3957,8 +3994,9 @@ function makeAccordion(secId, groups){
       h("summary", {}, h("span", { class: "acc-title" }, title), sum), h("div", { class: "acc-body" }, ...ids.map(fieldOf)));
     d.addEventListener("toggle", () => {
       if (d.open){
-        accOpen[secId] = key;
-        for (const o of sec.querySelectorAll("details.acc")) if (o !== d && o.open) o.open = false;
+        accOpen[secId] = key; accLast = secId;
+        const scope = d.closest("#inspector") || sec;          // the project panel holds both groups: still one open
+        for (const o of scope.querySelectorAll("details.acc")) if (o !== d && o.open) o.open = false;
         syncRanges(d);
         const box = $("inspector");
         if (d.isConnected && !docked()) requestAnimationFrame(() => {
@@ -4064,6 +4102,16 @@ function buildMoveTool(box, i, tool){
     box.append(toolHead("Style · " + name), h("div", { class:"panel-body" }, body));
   }
 }
+/* desktop, nothing selected: the project's Timing and Look settings, one section open at a time */
+function buildProjectPanel(box){
+  box.append(h("div", { class: "insp-head" }, h("span", {}, "Project")));
+  if (shots.length < 3) box.append(h("p", { class: "sheet-note", style: "margin:-2px 0 6px" },
+    "Draw on the image to add a shot. Select a shot or a move to edit it here."));
+  box.append(h("div", { class: "proj-group" }, "Timing"), $("secTiming"), h("div", { class: "proj-group" }, "Look & frame"), $("secLook"));
+  for (const id of ["secTiming", "secLook"]) for (const d of $(id).querySelectorAll("details.acc"))
+    d.open = id === accLast && d.dataset.key === accOpen[id];
+  syncTimingSegs();
+}
 function buildTimingPanel(box){
   box.append(inspHead("Timing"), $("secTiming"));
   restoreAccordion("secTiming");
@@ -4160,6 +4208,12 @@ function buildAddMusicPanel(box){
 }
 function renderInspector(){
   const box = $("inspector");
+  // keep keyboard focus across the rebuild (a slider adjusted with arrow keys stays focused, so the next key
+  // goes to it rather than to the page, where Delete would remove the shot)
+  const fe = document.activeElement;
+  const sameKind = el => [...box.querySelectorAll(el.tagName)].filter(x => (x.type || "") === (el.type || ""));
+  let refocus = null;   // by id, else by position among controls of the same kind (a reset link appearing doesn't shift it)
+  if (fe && fe !== box && box.contains(fe)) refocus = fe.id ? { id: fe.id } : { tag: fe.tagName, type: fe.type || "", i: sameKind(fe).indexOf(fe) };
   $("panelPark").appendChild($("secTiming"));            // keep the timing controls in the page while closed
   $("panelPark").appendChild($("secLook"));
   box.innerHTML = "";
@@ -4170,9 +4224,13 @@ function renderInspector(){
   else if (src && selMedia && src.animated) buildMediaInspector(box);
   else if (src && selSound) (sound.track || src.audio) ? buildSoundInspector(box) : buildAddMusicPanel(box);
   const has = box.childElementCount > 0;
-  if (!has && src && docked())
-    box.append(h("div", { class:"insp-empty" }, "Draw on the image to add a shot. Tap a shot, a move, or the Speed and Sound rows to edit them here."));
+  if (!has && src && docked()) buildProjectPanel(box);
   box.hidden = !box.childElementCount;
+  if (refocus){
+    const el = refocus.id ? document.getElementById(refocus.id)
+      : [...box.querySelectorAll(refocus.tag)].filter(x => (x.type || "") === refocus.type)[refocus.i];
+    if (el && box.contains(el)) el.focus({ preventScroll: true });
+  }
   syncRanges(box);
   updateSheetH();
 }
@@ -4532,6 +4590,28 @@ document.addEventListener("keydown", e => {
   if (e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName) && /^(text|search|number)$/.test(e.target.type || "text") && e.target.type !== "range") return;
   if (k === "z" && !e.shiftKey){ e.preventDefault(); undo(); }
   else if ((k === "z" && e.shiftKey) || k === "y"){ e.preventDefault(); redo(); }
+});
+
+/* Keyboard: Space plays/pauses; with a shot selected, arrows nudge it (Shift: 10x), Delete removes it,
+   Ctrl/Cmd+D duplicates it. Ignored while typing, adjusting a slider, or with a dialog open. */
+document.addEventListener("keydown", e => {
+  if (e.defaultPrevented || e.altKey || !src || document.querySelector("dialog[open]")) return;
+  const t = e.target, tag = t && t.tagName;
+  if (t && (t.isContentEditable || tag === "TEXTAREA" || tag === "SELECT" || (tag === "INPUT" && !/^(checkbox|radio|button)$/.test(t.type)))) return;
+  const mod = e.ctrlKey || e.metaKey, shot = shotMode() ? shots[activeShot] : null;
+  if (e.key === " " && !mod){ e.preventDefault(); if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur(); $("btnPreview").click(); return; }
+  if (mod){
+    if (e.key.toLowerCase() === "d" && shot && !shot.full){ e.preventDefault(); dupShot(activeShot); }
+    return;
+  }
+  if ((e.key === "Delete" || e.key === "Backspace") && shot){ e.preventDefault(); deleteShot(activeShot); return; }
+  const dir = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
+  if (dir && shot && !shot.full){
+    e.preventDefault();
+    const step = (e.shiftKey ? 10 : 1) / (scale || 1), c = ctr(shot);   // one screen pixel (ten with Shift)
+    Object.assign(shot, fitRect(c.cx + dir[0] * step, c.cy + dir[1] * step, shot.w, rotOf(shot)));
+    sel = { ...shot }; coalesceNext("nudge"); refreshTotal(); draw();
+  }
 });
 
 /* ================= project files =================
