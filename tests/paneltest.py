@@ -1,0 +1,35 @@
+from kitconf import URL, REFERENCE_URL, CHROMIUM, CHROME_H264, OUT
+import asyncio
+from playwright.async_api import async_playwright
+IMG = open('auditshots.py').read().split('IMG = r"""')[1].split('"""')[0]
+async def main():
+    async with async_playwright() as p:
+        b = await p.chromium.launch(executable_path=CHROMIUM)
+        m = await b.new_page(viewport={'width':390,'height':844}, device_scale_factor=2, is_mobile=True, has_touch=True)
+        errs = []; m.on('pageerror', lambda e: errs.append(str(e)))
+        await m.goto(URL); await m.evaluate(IMG)
+        await m.evaluate("() => { setTimeout(async () => { await loadFile(await photo()); shots.push(fitRect(1050, 470, 400, 0)); deselect(); document.getElementById('status').classList.remove('show'); window.__a = 1; }, 0); }")
+        await m.wait_for_function("() => window.__a"); await m.wait_for_timeout(200)
+        await m.locator('#trayTiming').tap(); await m.wait_for_timeout(300)
+        await m.screenshot(path=OUT + '/acc1.png')
+        await m.locator('details.acc[data-key=camera] summary').tap(); await m.wait_for_timeout(200)
+        await m.locator('details.acc[data-key=moves] summary').tap(); await m.wait_for_timeout(200)
+        print('P1 one open at a time:', await m.evaluate("() => [...document.querySelectorAll('#secTiming details.acc')].map(d => d.dataset.key + (d.open ? ':open' : ''))"))
+        await m.evaluate("() => { const i = document.getElementById('inspector'); i.scrollTop = i.scrollHeight; i.dispatchEvent(new Event('scroll')); }"); await m.wait_for_timeout(200)
+        hdr = await m.evaluate("() => { const h = document.querySelector('#inspector .insp-head').getBoundingClientRect(), i = document.getElementById('inspector').getBoundingClientRect(); return { headerTopVsPanelTop: Math.round(h.top - i.top), scrolledBy: document.getElementById('inspector').scrollTop }; }")
+        print('P2 header pinned after scrolling (0-2 px from the panel top):', hdr)
+        await m.screenshot(path=OUT + '/acc2.png')
+        await m.locator('#easeSeg button[data-v=gentle]').tap(); await m.wait_for_timeout(150)
+        print('P3 summary follows changes:', await m.evaluate("() => document.querySelector('details.acc[data-key=moves] .acc-sum').textContent"))
+        await m.locator('#inspector .done-btn').tap(); await m.wait_for_timeout(150)
+        await m.locator('#trayTiming').tap(); await m.wait_for_timeout(200)
+        print('P4 reopening Timing remembers Moves:', await m.evaluate("() => [...document.querySelectorAll('#secTiming details.acc')].filter(d => d.open).map(d => d.dataset.key)"))
+        await m.locator('#inspector .done-btn').tap(); await m.wait_for_timeout(150)
+        await m.locator('#trayLook').tap(); await m.wait_for_timeout(200)
+        await m.locator('details.acc[data-key=color] summary').tap(); await m.wait_for_timeout(150)
+        await m.locator('#lookSeg button[data-v=warm]').tap(); await m.wait_for_timeout(250)
+        await m.screenshot(path=OUT + '/acc3.png')
+        print('P5 Look summaries:', await m.evaluate("() => [...document.querySelectorAll('#secLook .acc-sum')].map(e => e.textContent)"))
+        print('ERRORS:', errs or 'none')
+        await b.close()
+asyncio.run(main())

@@ -1,14 +1,19 @@
 {
-  "name": "Dolly — draw a frame, render the move",
+  "name": "Dolly: cinematic camera moves from photos, GIFs and video",
   "short_name": "Dolly",
-  "description": "Turn a still image into a dolly, pan or zoom clip. Draw regions, render the camera move as WebM or GIF. Everything runs in the browser.",
+  "description": "Turn a photo, GIF or video into a cinematic camera move. Frame shots, shape the motion, add a look, and export MP4, WebM or GIF. Everything runs in your browser.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#101014",
   "theme_color": "#101014",
-  "categories": ["photo", "video", "graphics", "utilities"],
+  "categories": [
+    "photo",
+    "video",
+    "graphics",
+    "utilities"
+  ],
   "icons": [
     {
       "src": "icon-192.png",

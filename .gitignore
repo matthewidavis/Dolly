@@ -1,0 +1,3 @@
+# test kit output (screenshots, logs)
+tests/out/
+__pycache__/
